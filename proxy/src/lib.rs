@@ -3,6 +3,10 @@ use std::{env, net::SocketAddr};
 use anyhow::{anyhow, Result};
 use tokio::net::{TcpListener, TcpStream};
 
+use crate::stream::Stream;
+
+pub mod stream;
+
 /// The proxy is responsible for accepting connections from the client and
 /// forwarding them to the correct server.
 ///
@@ -70,50 +74,39 @@ impl Proxy {
         // for the moment, just forward the connection to a static server
         let server_addr = "127.0.0.1:25566";
 
-        let mut client_stream = socket;
-        let mut server_stream = Self::connect_to_server(server_addr).await?;
-        // todo(iverly): handle server connection errors & send back to the client
+        let client_stream = Stream::wrap(socket);
+        client_stream.configure()?;
 
-        Self::set_stream_nodelay(&mut client_stream)?;
-        Self::set_stream_nodelay(&mut server_stream)?;
+        let server_stream = Stream::from(server_addr).await?;
+        // todo(iverly): handle server connection errors & send back to the client
+        server_stream.configure()?;
 
         // todo(iverly): send the handshake packet to the server
 
-        tokio::io::copy_bidirectional(&mut client_stream, &mut server_stream)
-            .await
-            .map_err(|e| anyhow!("failed to copy data between client and server: {}", e))?;
+        Self::copy_streams(client_stream, server_stream).await?;
 
         log::debug!("connection closed from {}", remote_addr);
         Ok(())
     }
 
-    /// It connects to a server and returns a `TcpStream` if successful
+    /// It copies data from the client to the server and vice versa
     ///
     /// Arguments:
     ///
-    /// * `server_addr`: The address of the server to connect to.
+    /// * `client_stream`: The stream that the client is connected to.
+    /// * `server_stream`: The stream to the server.
     ///
     /// Returns:
     ///
-    /// A Result<TcpStream>
-    async fn connect_to_server(server_addr: &str) -> Result<TcpStream> {
-        TcpStream::connect(server_addr)
-            .await
-            .map_err(|e| anyhow!("Failed to connect to {}: {}", server_addr, e))
-    }
+    /// A future that resolves to a Result<()>
+    async fn copy_streams(client_stream: Stream, server_stream: Stream) -> Result<()> {
+        let mut client_tcp_stream = client_stream.tcp_stream();
+        let mut server_tcp_stream = server_stream.tcp_stream();
 
-    /// `set_stream_nodelay` sets the TCP_NODELAY option on a TCP stream
-    ///
-    /// Arguments:
-    ///
-    /// * `stream`: The stream to set nodelay on.
-    ///
-    /// Returns:
-    ///
-    /// Result<()>
-    fn set_stream_nodelay(stream: &mut TcpStream) -> Result<()> {
-        stream
-            .set_nodelay(true)
-            .map_err(|e| anyhow!("Failed to set nodelay on stream: {}", e))
+        tokio::io::copy_bidirectional(&mut client_tcp_stream, &mut server_tcp_stream)
+            .await
+            .map_err(|e| anyhow!("failed to copy data between client and server: {}", e))?;
+
+        Ok(())
     }
 }
