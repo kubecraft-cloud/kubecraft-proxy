@@ -2,4 +2,5 @@
 members = [
     "app",
     "proxy",
+    "protocol",
 ]
