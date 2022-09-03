@@ -1,6 +1,10 @@
+use anyhow::Result;
 use std::env;
 
-fn main() {
+use proxy::Proxy;
+
+#[tokio::main]
+async fn main() -> Result<()> {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
     }
@@ -8,7 +12,9 @@ fn main() {
 
     log::info!(target: "kubecraft-proxy", "starting up");
 
-    // todo(iverly): add logic here
+    let proxy = Proxy::new();
+    proxy.start().await?;
 
     log::info!(target: "kubecraft-proxy", "shutting down");
+    Ok(())
 }
