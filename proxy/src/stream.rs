@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use protocol::packets::handshake::Handshake;
 use tokio::net::TcpStream;
 
 #[derive(Debug)]
@@ -59,5 +60,27 @@ impl Stream {
     /// A TcpStream
     pub fn tcp_stream(self) -> TcpStream {
         self.tcp_stream
+    }
+
+    /// It reads a handshake from the stream
+    ///
+    /// Returns:
+    ///
+    /// A Result<Handshake>
+    pub async fn read_handshake(&mut self) -> Result<Handshake> {
+        Handshake::read(&mut self.tcp_stream).await
+    }
+
+    /// It writes a handshake to the stream
+    ///
+    /// Arguments:
+    ///
+    /// * `handshake`: The handshake to write to the stream.
+    ///
+    /// Returns:
+    ///
+    /// A Result<()>
+    pub async fn write_handshake(&mut self, handshake: &Handshake) -> Result<()> {
+        handshake.write(&mut self.tcp_stream).await
     }
 }

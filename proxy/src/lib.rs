@@ -68,20 +68,30 @@ impl Proxy {
     ///
     /// A Result<()>
     async fn handle_connection(socket: TcpStream, remote_addr: SocketAddr) -> Result<()> {
-        // todo(iverly): handle the handshake packet
+        let mut client_stream = Stream::wrap(socket);
+        client_stream.configure()?;
+
+        let handshake = client_stream.read_handshake().await.map_err(|e| {
+            anyhow!(
+                "failed to read handshake packet from client {}: {}",
+                remote_addr,
+                e
+            )
+        })?;
+        log::debug!(
+            "client {} trying to connect to {}",
+            remote_addr,
+            handshake.hostname()
+        );
 
         // todo(iverly): read the handshake packet and determine the server address
         // for the moment, just forward the connection to a static server
         let server_addr = "127.0.0.1:25566";
 
-        let client_stream = Stream::wrap(socket);
-        client_stream.configure()?;
-
-        let server_stream = Stream::from(server_addr).await?;
+        let mut server_stream = Stream::from(server_addr).await?;
         // todo(iverly): handle server connection errors & send back to the client
         server_stream.configure()?;
-
-        // todo(iverly): send the handshake packet to the server
+        server_stream.write_handshake(&handshake).await?;
 
         Self::copy_streams(client_stream, server_stream).await?;
 
