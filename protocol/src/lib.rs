@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+pub mod packets;
+
 /// It reads a variable length integer from a stream
 ///
 /// Arguments:
