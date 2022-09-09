@@ -1,7 +1,12 @@
-use std::{env, net::SocketAddr};
+use std::{env, net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use tokio::net::{TcpListener, TcpStream};
+use log::debug;
+use storage::Storage;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::Mutex,
+};
 
 use crate::stream::Stream;
 
@@ -20,7 +25,9 @@ pub mod stream;
 /// The proxy is responsible for keeping track of the server's state and
 /// forwarding packets to the correct client.
 #[derive(Debug, Default)]
-pub struct Proxy {}
+pub struct Proxy {
+    storage: Arc<Mutex<Storage>>,
+}
 
 impl Proxy {
     /// Creates a new instance of the `Proxy` struct
@@ -48,10 +55,13 @@ impl Proxy {
             .map_err(|e| anyhow!("Failed to bind proxy to {}: {}", addr, e))?;
 
         loop {
+            let storage = self.storage.clone();
+
             let (socket, remote_addr) = listener.accept().await?;
             log::debug!("serving incoming connection from {}", remote_addr);
+
             tokio::spawn(async move {
-                if let Err(e) = Self::handle_connection(socket, remote_addr).await {
+                if let Err(e) = Self::handle_connection(socket, remote_addr, storage).await {
                     log::error!("failed to handle connection: {}", e);
                 }
             });
@@ -69,7 +79,11 @@ impl Proxy {
     /// Returns:
     ///
     /// A Result<()>
-    async fn handle_connection(socket: TcpStream, remote_addr: SocketAddr) -> Result<()> {
+    async fn handle_connection(
+        socket: TcpStream,
+        remote_addr: SocketAddr,
+        storage: Arc<Mutex<Storage>>,
+    ) -> Result<()> {
         let mut client_stream = Stream::wrap(socket);
         client_stream.configure()?;
 
@@ -86,9 +100,15 @@ impl Proxy {
             handshake.hostname()
         );
 
-        // todo(iverly): read the handshake packet and determine the server address
-        // for the moment, just forward the connection to a static server
-        let server_addr = "127.0.0.1:25566";
+        // todo(iverly): handle the case where the server is not found
+        let server_addr = storage
+            .lock()
+            .await
+            .get_backend(handshake.hostname().as_str())
+            .ok_or_else(|| anyhow!("unable to find hostname: {}", handshake.hostname()))?
+            .addr();
+
+        debug!("forwarding client packets to {}", server_addr);
 
         let mut server_stream = Stream::from(server_addr).await?;
         // todo(iverly): handle server connection errors & send back to the client

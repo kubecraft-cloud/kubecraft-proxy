@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use anyhow::{anyhow, Result};
 use protocol::packets::handshake::Handshake;
 use tokio::net::TcpStream;
@@ -31,7 +33,7 @@ impl Stream {
     /// Returns:
     ///
     /// A `Result<Self>`
-    pub async fn from(server_addr: &str) -> Result<Self> {
+    pub async fn from(server_addr: SocketAddr) -> Result<Self> {
         let tcp_stream = TcpStream::connect(server_addr)
             .await
             .map_err(|e| anyhow!("Failed to connect to {}: {}", server_addr, e))?;
