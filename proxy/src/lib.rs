@@ -5,6 +5,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 use crate::stream::Stream;
 
+pub mod backend;
 pub mod stream;
 
 /// The proxy is responsible for accepting connections from the client and
