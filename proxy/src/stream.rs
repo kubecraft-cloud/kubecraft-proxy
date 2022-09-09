@@ -91,4 +91,40 @@ impl Stream {
     ) -> Result<()> {
         handshake.write(&mut self.tcp_stream).await
     }
+
+    /// It kicks the user with the message "Backend not found"
+    ///
+    /// Arguments:
+    ///
+    /// * `next_state`: Next state of the handshake
+    ///
+    /// Returns:
+    ///
+    /// A Result<()>
+    pub async fn kick_backend_not_found(&mut self, next_state: NextState) -> Result<()> {
+        // todo(iverly): get the message from the env for each next_state
+        self.kick("Backend not found".to_string(), next_state).await
+    }
+
+    /// It kicks the user with the reason, then shuts down the TCP stream
+    ///
+    /// Arguments:
+    ///
+    /// * `reason`: The reason for the kick.
+    /// * `next_state`: The next state the client will be in.
+    ///
+    /// Returns:
+    ///
+    /// Result<()>
+    async fn kick(&mut self, reason: String, next_state: NextState) -> Result<()> {
+        let status = clientbound::status::Status::from_error(reason);
+
+        match next_state {
+            NextState::Login => status.write_as_text(&mut self.tcp_stream).await,
+            NextState::Status => status.write_as_motd(&mut self.tcp_stream).await,
+        }?;
+
+        self.tcp_stream.shutdown().await?;
+        Ok(())
+    }
 }

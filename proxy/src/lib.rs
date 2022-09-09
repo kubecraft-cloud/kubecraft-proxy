@@ -1,7 +1,6 @@
 use std::{env, net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use log::debug;
 use storage::Storage;
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -100,15 +99,21 @@ impl Proxy {
             handshake.hostname()
         );
 
-        // todo(iverly): handle the case where the server is not found
-        let server_addr = storage
+        let server_addr = match storage
             .lock()
             .await
             .get_backend(handshake.hostname().as_str())
-            .ok_or_else(|| anyhow!("unable to find hostname: {}", handshake.hostname()))?
-            .addr();
+        {
+            Some(backend) => backend.addr(),
+            None => {
+                client_stream
+                    .kick_backend_not_found(handshake.next_state())
+                    .await?;
+                return Err(anyhow!("unable to find hostname: {}", handshake.hostname()));
+            }
+        };
 
-        debug!("forwarding client packets to {}", server_addr);
+        log::debug!("forwarding client packets to {}", server_addr);
 
         let mut server_stream = Stream::from(server_addr).await?;
         // todo(iverly): handle server connection errors & send back to the client
