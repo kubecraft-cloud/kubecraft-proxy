@@ -1,1 +1,2 @@
-pub mod handshake;
+pub mod clientbound;
+pub mod serverbound;

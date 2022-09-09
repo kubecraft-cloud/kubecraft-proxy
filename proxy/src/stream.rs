@@ -1,8 +1,11 @@
 use std::net::SocketAddr;
 
 use anyhow::{anyhow, Result};
-use protocol::packets::handshake::Handshake;
-use tokio::net::TcpStream;
+use protocol::packets::{
+    clientbound,
+    serverbound::{self, handshake::NextState},
+};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 #[derive(Debug)]
 pub struct Stream {
@@ -69,8 +72,8 @@ impl Stream {
     /// Returns:
     ///
     /// A Result<Handshake>
-    pub async fn read_handshake(&mut self) -> Result<Handshake> {
-        Handshake::read(&mut self.tcp_stream).await
+    pub async fn read_handshake(&mut self) -> Result<serverbound::handshake::Handshake> {
+        serverbound::handshake::Handshake::read(&mut self.tcp_stream).await
     }
 
     /// It writes a handshake to the stream
@@ -82,7 +85,10 @@ impl Stream {
     /// Returns:
     ///
     /// A Result<()>
-    pub async fn write_handshake(&mut self, handshake: &Handshake) -> Result<()> {
+    pub async fn write_handshake(
+        &mut self,
+        handshake: &serverbound::handshake::Handshake,
+    ) -> Result<()> {
         handshake.write(&mut self.tcp_stream).await
     }
 }
