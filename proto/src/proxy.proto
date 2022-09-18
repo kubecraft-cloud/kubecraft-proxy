@@ -2,3 +2,14 @@ syntax = "proto3";
 
 package proxy;
 import "google/protobuf/empty.proto";
+
+message Backend {
+  string hostname = 2;
+  string redirect_ip = 3;
+}
+
+service ProxyService {
+    rpc ListBackend(google.protobuf.Empty) returns (stream Backend) {}
+    rpc PutBackend(Backend) returns (google.protobuf.Empty) {}
+    rpc DeleteBackend(Backend) returns (google.protobuf.Empty) {}
+}
