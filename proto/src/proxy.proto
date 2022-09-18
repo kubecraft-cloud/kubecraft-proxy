@@ -1,0 +1,4 @@
+syntax = "proto3";
+
+package proxy;
+import "google/protobuf/empty.proto";
