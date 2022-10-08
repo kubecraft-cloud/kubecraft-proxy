@@ -120,6 +120,15 @@ impl Handshake {
     pub fn next_state(&self) -> NextState {
         self.next_state
     }
+
+    /// It sets the `hostname` of the handshake packet
+    ///
+    /// Returns:
+    ///
+    /// ().
+    pub fn set_hostname(&mut self, hostname: String) {
+        self.hostname = hostname;
+    }
 }
 
 /// `NextState` is an enum that contains the next state of the game.
