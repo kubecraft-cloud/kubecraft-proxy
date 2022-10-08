@@ -6,10 +6,11 @@ import "google/protobuf/empty.proto";
 message Backend {
   string hostname = 2;
   string redirect_ip = 3;
+  string redirect_port = 4;
 }
 
 service ProxyService {
-    rpc ListBackend(google.protobuf.Empty) returns (stream Backend) {}
-    rpc PutBackend(Backend) returns (google.protobuf.Empty) {}
-    rpc DeleteBackend(Backend) returns (google.protobuf.Empty) {}
+  rpc ListBackend(google.protobuf.Empty) returns (stream Backend) {}
+  rpc PutBackend(Backend) returns (google.protobuf.Empty) {}
+  rpc DeleteBackend(Backend) returns (google.protobuf.Empty) {}
 }

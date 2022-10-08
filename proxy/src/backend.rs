@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 /// A backend is a Minecraft server that the proxy can connect to.
 ///
 /// Properties:
@@ -8,8 +6,9 @@ use std::net::SocketAddr;
 /// * `port`: The port that the backend server is listening on.
 #[derive(Debug, Clone)]
 pub struct Backend {
-    host: String,
-    port: u16,
+    hostname: String,
+    redirect_ip: String,
+    redirect_port: u16,
 }
 
 impl Backend {
@@ -23,8 +22,12 @@ impl Backend {
     /// Returns:
     ///
     /// A new instance of the struct.
-    pub fn new(host: String, port: u16) -> Self {
-        Self { host, port }
+    pub fn new(hostname: String, redirect_ip: String, redirect_port: u16) -> Self {
+        Self {
+            hostname,
+            redirect_ip,
+            redirect_port,
+        }
     }
 
     /// It returns the host of the backend
@@ -32,8 +35,17 @@ impl Backend {
     /// Returns:
     ///
     /// The host of the backend
-    pub fn host(&self) -> &str {
-        self.host.as_str()
+    pub fn hostname(&self) -> &str {
+        self.hostname.as_str()
+    }
+
+    /// It returns the ip of the backend
+    ///
+    /// Returns:
+    ///
+    /// The ip of the backend
+    pub fn redirect_ip(&self) -> &str {
+        self.redirect_ip.as_str()
     }
 
     /// It returns the port of the backend
@@ -41,8 +53,8 @@ impl Backend {
     /// Returns:
     ///
     /// The port of the backend
-    pub fn port(&self) -> u16 {
-        self.port
+    pub fn redirect_port(&self) -> u16 {
+        self.redirect_port
     }
 
     /// It returns the address of the backend
@@ -50,7 +62,7 @@ impl Backend {
     /// Returns:
     ///
     /// The address of the backend
-    pub fn addr(&self) -> SocketAddr {
-        SocketAddr::new(self.host.parse().unwrap(), self.port)
+    pub fn addr(&self) -> String {
+        self.redirect_ip.clone() + ":" + &self.redirect_port.to_string()
     }
 }
