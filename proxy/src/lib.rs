@@ -86,7 +86,7 @@ impl Proxy {
         let mut client_stream = Stream::wrap(socket);
         client_stream.configure()?;
 
-        let handshake = client_stream.read_handshake().await.map_err(|e| {
+        let mut handshake = client_stream.read_handshake().await.map_err(|e| {
             anyhow!(
                 "failed to read handshake packet from client {}: {}",
                 remote_addr,
@@ -99,12 +99,12 @@ impl Proxy {
             handshake.hostname()
         );
 
-        let server_addr = match storage
+        let (backend_addr, backend_host) = match storage
             .lock()
             .await
             .get_backend(handshake.hostname().as_str())
         {
-            Some(backend) => backend.addr(),
+            Some(backend) => (backend.addr(), backend.redirect_ip().to_string()),
             None => {
                 client_stream
                     .kick_backend_not_found(handshake.next_state())
@@ -113,11 +113,14 @@ impl Proxy {
             }
         };
 
-        log::debug!("forwarding client packets to {}", server_addr);
+        log::debug!("forwarding client packets to {}", backend_addr);
 
-        let mut server_stream = Stream::from(&server_addr).await?;
+        let mut server_stream = Stream::from(&backend_addr).await?;
         // todo(iverly): handle server connection errors & send back to the client
         server_stream.configure()?;
+
+        // rewrite handshake packet to use the backend's IP
+        handshake.set_hostname(backend_host);
         server_stream.write_handshake(&handshake).await?;
 
         Self::copy_streams(client_stream, server_stream).await?;
