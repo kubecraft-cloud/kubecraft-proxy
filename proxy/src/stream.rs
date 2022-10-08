@@ -1,11 +1,14 @@
-use std::net::SocketAddr;
+use std::fmt::Debug;
 
 use anyhow::{anyhow, Result};
 use protocol::packets::{
     clientbound,
     serverbound::{self, handshake::NextState},
 };
-use tokio::{io::AsyncWriteExt, net::TcpStream};
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpStream, ToSocketAddrs},
+};
 
 #[derive(Debug)]
 pub struct Stream {
@@ -36,10 +39,10 @@ impl Stream {
     /// Returns:
     ///
     /// A `Result<Self>`
-    pub async fn from(server_addr: SocketAddr) -> Result<Self> {
-        let tcp_stream = TcpStream::connect(server_addr)
+    pub async fn from<A: ToSocketAddrs + Debug + Clone>(server_addr: A) -> Result<Self> {
+        let tcp_stream = TcpStream::connect(server_addr.clone())
             .await
-            .map_err(|e| anyhow!("Failed to connect to {}: {}", server_addr, e))?;
+            .map_err(|e| anyhow!("Failed to connect to {:?}: {}", server_addr, e))?;
 
         Ok(Self::wrap(tcp_stream))
     }

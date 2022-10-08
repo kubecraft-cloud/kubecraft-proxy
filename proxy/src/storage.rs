@@ -30,7 +30,8 @@ impl Storage {
     ///
     /// A Result<()>
     pub fn add_backend(&mut self, backend: Backend) -> Result<()> {
-        self.backends.insert(backend.host().to_string(), backend);
+        self.backends
+            .insert(backend.hostname().to_string(), backend);
         Ok(())
     }
 

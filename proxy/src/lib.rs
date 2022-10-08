@@ -115,7 +115,7 @@ impl Proxy {
 
         log::debug!("forwarding client packets to {}", server_addr);
 
-        let mut server_stream = Stream::from(server_addr).await?;
+        let mut server_stream = Stream::from(&server_addr).await?;
         // todo(iverly): handle server connection errors & send back to the client
         server_stream.configure()?;
         server_stream.write_handshake(&handshake).await?;
