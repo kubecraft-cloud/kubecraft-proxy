@@ -6,7 +6,7 @@ import "google/protobuf/empty.proto";
 message Backend {
   string hostname = 2;
   string redirect_ip = 3;
-  string redirect_port = 4;
+  uint32 redirect_port = 4;
 }
 
 service ProxyService {
