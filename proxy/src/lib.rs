@@ -1,11 +1,8 @@
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{env, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Ok, Result};
 use storage::Storage;
-use tokio::{
-    net::{TcpListener, TcpStream},
-    sync::Mutex,
-};
+use tokio::{join, net::TcpListener, sync::Mutex};
 
 use crate::stream::Stream;
 
@@ -53,18 +50,13 @@ impl Proxy {
             .await
             .map_err(|e| anyhow!("Failed to bind proxy to {}: {}", addr, e))?;
 
-        loop {
-            let storage = self.storage.clone();
+        let results = join!(Self::handle_connections(listener, self.storage.clone()));
 
-            let (socket, remote_addr) = listener.accept().await?;
-            log::debug!("serving incoming connection from {}", remote_addr);
+        results
+            .0
+            .unwrap_or_else(|e| log::error!("proxy connection handler exited with error: {}", e));
 
-            tokio::spawn(async move {
-                if let Err(e) = Self::handle_connection(socket, remote_addr, storage).await {
-                    log::error!("failed to handle connection: {}", e);
-                }
-            });
-        }
+        Ok(())
     }
 
     /// It reads the handshake packet from the client, connects to the server, and then forwards all
@@ -78,55 +70,105 @@ impl Proxy {
     /// Returns:
     ///
     /// A Result<()>
-    async fn handle_connection(
-        socket: TcpStream,
-        remote_addr: SocketAddr,
-        storage: Arc<Mutex<Storage>>,
-    ) -> Result<()> {
-        let mut client_stream = Stream::wrap(socket);
-        client_stream.configure()?;
+    async fn handle_connections(listener: TcpListener, storage: Arc<Mutex<Storage>>) -> Result<()> {
+        loop {
+            let (socket, remote_addr) = listener.accept().await?;
+            log::debug!("serving incoming connection from {}", remote_addr);
 
-        let mut handshake = client_stream.read_handshake().await.map_err(|e| {
-            anyhow!(
-                "failed to read handshake packet from client {}: {}",
-                remote_addr,
-                e
-            )
-        })?;
-        log::debug!(
-            "client {} trying to connect to {}",
-            remote_addr,
-            handshake.hostname()
-        );
+            let storage = storage.clone();
 
-        let (backend_addr, backend_host) = match storage
-            .lock()
-            .await
-            .get_backend(handshake.hostname().as_str())
-        {
-            Some(backend) => (backend.addr(), backend.redirect_ip().to_string()),
-            None => {
-                client_stream
-                    .kick_backend_not_found(handshake.next_state())
-                    .await?;
-                return Err(anyhow!("unable to find hostname: {}", handshake.hostname()));
-            }
-        };
+            // Handle connection in parallel
+            tokio::spawn(async move {
+                let mut client_stream = Stream::wrap(socket);
+                client_stream.configure().map_err(|e| {
+                    let err_msg = format!(
+                        "failed to configure client stream for {}: {}",
+                        remote_addr, e
+                    );
+                    log::error!("{}", err_msg);
+                    anyhow!(err_msg)
+                })?;
 
-        log::debug!("forwarding client packets to {}", backend_addr);
+                let mut handshake = client_stream.read_handshake().await.map_err(|e| {
+                    let err_msg = format!(
+                        "failed to read handshake packet from client {}: {}",
+                        remote_addr, e
+                    );
+                    log::error!("{}", err_msg);
+                    anyhow!(err_msg)
+                })?;
 
-        let mut server_stream = Stream::from(&backend_addr).await?;
-        // todo(iverly): handle server connection errors & send back to the client
-        server_stream.configure()?;
+                log::debug!(
+                    "client {} trying to connect to {}",
+                    remote_addr,
+                    handshake.hostname()
+                );
 
-        // rewrite handshake packet to use the backend's IP
-        handshake.set_hostname(backend_host);
-        server_stream.write_handshake(&handshake).await?;
+                let (backend_addr, backend_host) = match storage
+                    .lock()
+                    .await
+                    .get_backend(handshake.hostname().as_str())
+                {
+                    Some(backend) => (backend.addr(), backend.redirect_ip().to_string()),
+                    None => {
+                        client_stream
+                            .kick_backend_not_found(handshake.next_state())
+                            .await
+                            .map_err(|e| {
+                                let err_msg =
+                                    format!("failed to kick client {}: {}", remote_addr, e);
+                                log::error!("{}", err_msg);
+                                anyhow!(err_msg)
+                            })?;
+                        return Err(anyhow!(
+                            "failed to handle connection, unable to find hostname: {}",
+                            handshake.hostname()
+                        ));
+                    }
+                };
 
-        Self::copy_streams(client_stream, server_stream).await?;
+                log::debug!("forwarding client packets to {}", backend_addr);
 
-        log::debug!("connection closed from {}", remote_addr);
-        Ok(())
+                let mut server_stream = Stream::from(&backend_addr).await?;
+                server_stream.configure().map_err(|e| {
+                    let err_msg = format!(
+                        "failed to configure server stream for {}: {}",
+                        backend_addr, e
+                    );
+                    log::error!("{}", err_msg);
+                    anyhow!(err_msg)
+                })?;
+
+                // rewrite handshake packet to use the backend's IP
+                handshake.set_hostname(backend_host);
+                server_stream
+                    .write_handshake(&handshake)
+                    .await
+                    .map_err(|e| {
+                        let err_msg = format!(
+                            "failed to write handshake packet to server {}: {}",
+                            backend_addr, e
+                        );
+                        log::error!("{}", err_msg);
+                        anyhow!(err_msg)
+                    })?;
+
+                Self::copy_streams(client_stream, server_stream)
+                    .await
+                    .map_err(|e| {
+                        let err_msg = format!(
+                            "failed to copy streams between client {} and server {}: {}",
+                            remote_addr, backend_addr, e
+                        );
+                        log::error!("{}", err_msg);
+                        anyhow!(err_msg)
+                    })?;
+
+                log::debug!("connection closed from {}", remote_addr);
+
+                Ok(())
+            });
+        }
     }
 
     /// It copies data from the client to the server and vice versa
