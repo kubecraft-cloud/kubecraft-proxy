@@ -1,8 +1,14 @@
 use std::{env, sync::Arc};
 
 use anyhow::{anyhow, Ok, Result};
+use listener::{event::Event, Listener};
+use log::debug;
 use storage::Storage;
-use tokio::{join, net::TcpListener, sync::Mutex};
+use tokio::{
+    join,
+    net::TcpListener,
+    sync::{mpsc::Receiver, Mutex},
+};
 
 use crate::stream::Stream;
 
@@ -42,19 +48,39 @@ impl Proxy {
     ///
     /// A Result<()>
     pub async fn start(&self) -> Result<()> {
-        let port = env::var("PROXY_PORT").unwrap_or_else(|_| "25565".to_string());
-        let addr = format!("0.0.0.0:{}", port);
+        let proxy_port = env::var("PROXY_PORT").unwrap_or_else(|_| "25565".to_string());
+        let proxy_addr = format!("0.0.0.0:{}", proxy_port);
 
-        log::info!("Starting proxy on {}", addr);
-        let listener = TcpListener::bind(addr.clone())
+        log::info!("Starting proxy on {}", proxy_addr);
+        let tcp_listener = TcpListener::bind(proxy_addr.clone())
             .await
-            .map_err(|e| anyhow!("Failed to bind proxy to {}: {}", addr, e))?;
+            .map_err(|e| anyhow!("Failed to bind proxy to {}: {}", proxy_addr, e))?;
 
-        let results = join!(Self::handle_connections(listener, self.storage.clone()));
+        let listener_port = env::var("LISTENER_PORT").unwrap_or_else(|_| "65535".to_string());
+        let listener_addr = format!("0.0.0.0:{}", listener_port);
+
+        log::info!("Starting listener on {}", listener_addr);
+        let listener = Listener::new(listener_addr);
+
+        // Start listener and pass it a channel to send events to the proxy
+        let (tx, rx) = tokio::sync::mpsc::channel::<Event>(16);
+
+        // Create the joins that will run in parallel
+        let results = join!(
+            Self::handle_connections(tcp_listener, self.storage.clone()),
+            Self::handle_listener_events(rx, self.storage.clone()),
+            listener.start(tx)
+        );
 
         results
             .0
             .unwrap_or_else(|e| log::error!("proxy connection handler exited with error: {}", e));
+        results
+            .1
+            .unwrap_or_else(|e| log::error!("listener event handler exited with error: {}", e));
+        results
+            .2
+            .unwrap_or_else(|e| log::error!("listener exited with error: {}", e));
 
         Ok(())
     }
@@ -190,5 +216,58 @@ impl Proxy {
             .map_err(|e| anyhow!("failed to copy data between client and server: {}", e))?;
 
         Ok(())
+    }
+
+    async fn handle_listener_events(
+        mut rx: Receiver<Event>,
+        storage: Arc<Mutex<Storage>>,
+    ) -> Result<()> {
+        loop {
+            let event = rx.recv().await.ok_or(anyhow!("failed to receive event"))?;
+            debug!("handling event: {:?}", event);
+
+            let storage = storage.clone();
+
+            tokio::spawn(async move {
+                match event {
+                    Event::DeleteBackend(backend, tx) => {
+                        tx.send(storage.lock().await.remove_backend(&backend.hostname))
+                            .map_err(|_| {
+                                log::error!("failed to send delete backend response");
+                                anyhow!("failed to send delete backend response")
+                            })?;
+                    }
+                    Event::PutBackend(backend, tx) => {
+                        tx.send(storage.lock().await.add_backend(backend::Backend::new(
+                            backend.hostname,
+                            backend.redirect_ip,
+                            backend.redirect_port,
+                        )))
+                        .map_err(|_| {
+                            log::error!("failed to send put backend response");
+                            anyhow!("failed to send put backend response")
+                        })?;
+                    }
+                    Event::ListBackends(tx) => {
+                        tx.send(Ok(storage
+                            .lock()
+                            .await
+                            .get_backends()
+                            .into_iter()
+                            .map(|backend| shared::models::backend::Backend {
+                                hostname: backend.hostname().to_string(),
+                                redirect_ip: backend.redirect_ip().to_string(),
+                                redirect_port: backend.redirect_port(),
+                            })
+                            .collect::<Vec<_>>()))
+                            .map_err(|_| {
+                                log::error!("failed to send list backends response");
+                                anyhow!("failed to send list backends response")
+                            })?;
+                    }
+                }
+                Ok(())
+            });
+        }
     }
 }

@@ -61,4 +61,13 @@ impl Storage {
     pub fn get_backend(&self, host: &str) -> Option<&Backend> {
         self.backends.get(host)
     }
+
+    /// It returns all the backends
+    ///
+    /// Returns:
+    ///
+    /// A vector with all the backends
+    pub fn get_backends(&self) -> Vec<&Backend> {
+        self.backends.values().collect()
+    }
 }
