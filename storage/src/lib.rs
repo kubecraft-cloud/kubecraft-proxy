@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-
-use crate::backend::Backend;
+use shared::models::backend::Backend;
 
 /// The storage is responsible for storing the backends
 #[derive(Debug, Default)]
@@ -66,8 +65,8 @@ impl Storage {
     ///
     /// Returns:
     ///
-    /// A vector with all the backends
-    pub fn get_backends(&self) -> Vec<&Backend> {
-        self.backends.values().collect()
+    /// All the backends
+    pub fn get_backends(&self) -> &BTreeMap<String, Backend> {
+        &self.backends
     }
 }
