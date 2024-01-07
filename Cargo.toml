@@ -4,4 +4,6 @@ members = [
     "proxy",
     "protocol",
     "proto",
+    "listener",
+    "shared"
 ]
