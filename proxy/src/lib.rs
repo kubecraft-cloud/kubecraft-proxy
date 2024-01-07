@@ -12,7 +12,6 @@ use tokio::{
 
 use crate::stream::Stream;
 
-pub mod backend;
 pub mod stream;
 
 /// The proxy is responsible for accepting connections from the client and
@@ -237,11 +236,13 @@ impl Proxy {
                             })?;
                     }
                     Event::PutBackend(backend, tx) => {
-                        tx.send(storage.lock().await.add_backend(backend::Backend::new(
-                            backend.hostname,
-                            backend.redirect_ip,
-                            backend.redirect_port,
-                        )))
+                        tx.send(storage.lock().await.add_backend(
+                            shared::models::backend::Backend::new(
+                                backend.hostname,
+                                backend.redirect_ip,
+                                backend.redirect_port,
+                            ),
+                        ))
                         .map_err(|_| {
                             log::error!("failed to send put backend response");
                             anyhow!("failed to send put backend response")
@@ -252,11 +253,11 @@ impl Proxy {
                             .lock()
                             .await
                             .get_backends()
-                            .into_iter()
+                            .iter()
                             .map(|backend| shared::models::backend::Backend {
-                                hostname: backend.hostname().to_string(),
-                                redirect_ip: backend.redirect_ip().to_string(),
-                                redirect_port: backend.redirect_port(),
+                                hostname: backend.1.hostname().to_string(),
+                                redirect_ip: backend.1.redirect_ip().to_string(),
+                                redirect_port: backend.1.redirect_port(),
                             })
                             .collect::<Vec<_>>()))
                             .map_err(|_| {
