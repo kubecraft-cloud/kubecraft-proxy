@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "app",
+    "event",
     "proxy",
     "protocol",
     "proto",
