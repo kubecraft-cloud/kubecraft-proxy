@@ -10,6 +10,7 @@ protocol = { path = "../protocol" }
 shared = { path = "../shared" }
 listener = { path = "../listener" }
 storage = { path = "../storage" }
+event = { path = "../event" }
 log = "0.4.17"
 tokio = { version = "1.21.0", features = ["rt", "net", "io-util", "sync"] }
 anyhow = "1.0.63"

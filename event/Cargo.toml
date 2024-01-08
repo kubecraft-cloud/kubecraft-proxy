@@ -11,3 +11,4 @@ storage = { path = "../storage" }
 shared = { path = "../shared" }
 tokio = { version = "1.26.0", features = [ "sync" ] }
 tonic = "0.7.2"
+anyhow = "1.0.63"

@@ -1,6 +1,10 @@
 use std::{env, sync::Arc};
 
 use anyhow::{anyhow, Ok, Result};
+use event::handlers::{
+    delete_backend::DeleteBackendHandler, list_backend::ListBackendHandler,
+    put_backend::PutBackendHandler,
+};
 use listener::{event::Event, Listener};
 use log::debug;
 use storage::Storage;
@@ -216,6 +220,19 @@ impl Proxy {
         Ok(())
     }
 
+    /// The function `handle_listener_events` handles events received from a channel by spawning async
+    /// tasks to handle different types of events.
+    ///
+    /// Arguments:
+    ///
+    /// * `rx`: A `Receiver<Event>` which is used to receive events from some event source.
+    /// * `storage`: `storage` is an `Arc<Mutex<Storage>>` which is a shared mutable state that is
+    /// protected by a mutex. It allows multiple threads to access and modify the `Storage` struct
+    /// concurrently.
+    ///
+    /// Returns:
+    ///
+    /// a `Result<()>`.
     async fn handle_listener_events(
         mut rx: Receiver<Event>,
         storage: Arc<Mutex<Storage>>,
@@ -228,42 +245,14 @@ impl Proxy {
 
             tokio::spawn(async move {
                 match event {
-                    Event::DeleteBackend(backend, tx) => {
-                        tx.send(storage.lock().await.remove_backend(&backend.hostname))
-                            .map_err(|_| {
-                                log::error!("failed to send delete backend response");
-                                anyhow!("failed to send delete backend response")
-                            })?;
+                    Event::ListBackends(tx) => {
+                        ListBackendHandler::handle(storage, tx).await;
                     }
                     Event::PutBackend(backend, tx) => {
-                        tx.send(storage.lock().await.add_backend(
-                            shared::models::backend::Backend::new(
-                                backend.hostname,
-                                backend.redirect_ip,
-                                backend.redirect_port,
-                            ),
-                        ))
-                        .map_err(|_| {
-                            log::error!("failed to send put backend response");
-                            anyhow!("failed to send put backend response")
-                        })?;
+                        PutBackendHandler::handle(storage, backend, tx).await;
                     }
-                    Event::ListBackends(tx) => {
-                        tx.send(Ok(storage
-                            .lock()
-                            .await
-                            .get_backends()
-                            .iter()
-                            .map(|backend| shared::models::backend::Backend {
-                                hostname: backend.1.hostname().to_string(),
-                                redirect_ip: backend.1.redirect_ip().to_string(),
-                                redirect_port: backend.1.redirect_port(),
-                            })
-                            .collect::<Vec<_>>()))
-                            .map_err(|_| {
-                                log::error!("failed to send list backends response");
-                                anyhow!("failed to send list backends response")
-                            })?;
+                    Event::DeleteBackend(backend, tx) => {
+                        DeleteBackendHandler::handle(storage, backend, tx).await;
                     }
                 }
                 Ok(())

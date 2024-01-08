@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use proto::proxy::Backend;
+use anyhow::{anyhow, Result};
+use shared::models::backend::Backend;
 use storage::Storage;
 use tokio::sync::{oneshot, Mutex};
 
@@ -17,13 +18,13 @@ impl DeleteBackendHandler {
     pub async fn handle(
         storage: Arc<Mutex<Storage>>,
         backend: Backend,
-        tx: oneshot::Sender<Result<(), tonic::Status>>,
+        tx: oneshot::Sender<Result<()>>,
     ) {
         let mut storage = storage.lock().await;
 
         let result = storage
             .remove_backend(&backend.hostname)
-            .map_err(|e| tonic::Status::internal(format!("Failed to delete backend: {}", e)));
+            .map_err(|e| anyhow!("Failed to delete backend: {}", e));
 
         let _ = tx.send(result);
     }
