@@ -1,5 +1,20 @@
 # kubecraft-proxy
 
+<p>
+  <a href="https://github.com/kubecraft-cloud/kubecraft-proxy/graphs/contributors">
+    <img src="https://img.shields.io/github/contributors/kubecraft-cloud/kubecraft-proxy" alt="contributors" />
+  </a>
+  <a href="https://github.com/kubecraft-cloud/kubecraft-proxy/commits/main">
+    <img src="https://img.shields.io/github/last-commit/kubecraft-cloud/kubecraft-proxy" alt="last update" />
+  </a>
+  <a href="https://github.com/kubecraft-cloud/kubecraft-proxy/issues/">
+    <img src="https://img.shields.io/github/issues/kubecraft-cloud/kubecraft-proxy" alt="open issues" />
+  </a>
+  <a href="https://github.com/kubecraft-cloud/kubecraft-proxy/blob/master/LICENSE">
+    <img src="https://img.shields.io/github/license/kubecraft-cloud/kubecraft-proxy.svg" alt="license" />
+  </a>
+</p>
+
 A reverse proxy for Minecraft server using gRPC for configuration. The goal is to provide a simple way to configure a Minecraft server without having to restart the proxy.
 
 This is useful for Minecraft servers running in a cloud environment where the servers are ephemeral and can be created at any time or for users that want to expose multiple servers on the same IP address and port.
