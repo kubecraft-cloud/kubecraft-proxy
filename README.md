@@ -19,6 +19,12 @@ A reverse proxy for Minecraft server using gRPC for configuration. The goal is t
 
 This is useful for Minecraft servers running in a cloud environment where the servers are ephemeral and can be created at any time or for users that want to expose multiple servers on the same IP address and port.
 
+> ⚠️ This project is still in early development and should **NOT** be used in production.
+
+> ⚠️ This project is **NOT** affiliated with Mojang Studios or Microsoft.
+
+> ⚠️ This project is **NOT** a BungeeCord alternative. This project is a reverse proxy and does not provide any of the features that BungeeCord provides.
+
 ## Features
 
 - [x] Reverse proxy for Minecraft servers
